@@ -1,0 +1,103 @@
+# ── Load your own dataset ───────────────────────────────────────────────
+# df = pd.read_csv('your_reviews.csv')
+# Required columns:
+#   review_text  : str   – the review body
+#   rating       : int   – 1–5 stars
+#   user_id      : str   – reviewer identifier
+#   date         : str   – ISO date string
+#   label        : int   – 1=fake, 0=genuine  (only for supervised mode)
+# ────────────────────────────────────────────────────────────────────────
+
+def generate_synthetic_dataset(n=2000, fake_ratio=0.25):
+    """Generates a realistic mixed review dataset for demonstration."""
+    np.random.seed(RANDOM_STATE)
+
+    genuine_templates = [
+        "I bought this {item} last {month} and it has been {adj}. The {feature} works exactly as described.",
+        "Really pleased with my purchase. Delivery was fast and the {item} is {adj} quality.",
+        "Mixed feelings. The {feature} is great but the {part} could be improved.",
+        "I've used this {item} for {weeks} weeks and it's held up well. The {feature} is a standout.",
+        "Decent {item}. Not perfect — the {part} is a bit fiddly — but good value overall.",
+        "Upgraded from the older model. Noticeable improvement in {feature}.",
+        "Bought as a gift. Recipient loved it, especially the {feature}.",
+    ]
+
+    fake_templates = [
+        "Amazing product!! Best {item} ever!!! Highly recommend to everyone!!!",
+        "LOVE THIS PRODUCT!!! Five stars!!! Will buy again!!! Amazing!!!!",
+        "Perfect!!! Excellent quality!!! Fast shipping!!! 10/10!!!",
+        "This is the best purchase I have ever made in my entire life. Absolutely perfect!",
+        "Great product great seller great shipping great everything 5 stars!",
+        "Received the item on time. Works as expected. Good quality. Recommended!",
+        "Excellent product. Very good quality. Fast delivery. Would recommend.",
+    ]
+
+    items    = ['headphones','laptop','blender','vacuum','camera','speaker','watch','router']
+    features = ['battery life','build quality','sound','display','suction','zoom','connectivity']
+    parts    = ['cable','strap','button','lid','handle','stand']
+    adjs     = ['solid','reliable','impressive','decent','mediocre','disappointing']
+    months   = ['January','February','March','April','May','June','July']
+
+    rows = []
+    base_date = datetime(2024, 1, 1)
+
+    # Fake users – burst behavior
+    fake_user_pool = [f'fakeuser_{i:04d}' for i in range(int(n * fake_ratio) // 5)]
+    # Genuine users
+    genuine_user_pool = [f'user_{i:05d}' for i in range(int(n * (1 - fake_ratio)))]
+
+    for i in range(n):
+        is_fake = (i < int(n * fake_ratio))
+
+        if is_fake:
+            tpl = np.random.choice(fake_templates)
+            # Add minor variation to simulate spinning
+            variation = np.random.random()
+            text = tpl.format(
+                item=np.random.choice(items),
+                feature=np.random.choice(features),
+                part=np.random.choice(parts),
+                adj=np.random.choice(['perfect','amazing','excellent']),
+                month=np.random.choice(months),
+                weeks=np.random.randint(1,4)
+            )
+            if variation < 0.3:   # clone with tiny edit
+                text = text.replace('!','!!')
+            rating   = np.random.choice([5,5,5,4], p=[0.8,0.1,0.06,0.04])
+            user_id  = np.random.choice(fake_user_pool)
+            # Burst: cluster dates
+            day_offset = np.random.randint(0, 3)
+            burst_base = np.random.randint(0, 120)
+            date = base_date + timedelta(days=burst_base + day_offset)
+        else:
+            tpl  = np.random.choice(genuine_templates)
+            text = tpl.format(
+                item=np.random.choice(items),
+                feature=np.random.choice(features),
+                part=np.random.choice(parts),
+                adj=np.random.choice(adjs),
+                month=np.random.choice(months),
+                weeks=np.random.randint(2,24)
+            )
+            rating   = np.random.choice([1,2,3,4,5], p=[0.1,0.1,0.2,0.3,0.3])
+            user_id  = np.random.choice(genuine_user_pool)
+            day_offset = np.random.randint(0, 180)
+            date = base_date + timedelta(days=day_offset)
+
+        rows.append({
+            'review_id'  : f'R{i:06d}',
+            'user_id'    : user_id,
+            'review_text': text,
+            'rating'     : rating,
+            'date'       : date.strftime('%Y-%m-%d'),
+            'label'      : int(is_fake)
+        })
+
+    return pd.DataFrame(rows)
+
+
+df = generate_synthetic_dataset(n=2000, fake_ratio=0.25)
+df['date'] = pd.to_datetime(df['date'])
+
+print(f'Dataset: {len(df)} reviews  |  Fake: {df.label.sum()} ({df.label.mean()*100:.1f}%)')
+df.head()
